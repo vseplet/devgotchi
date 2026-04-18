@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun --env-file=.env.dev run --watch src/cli.ts",
     "prod": "bun --env-file=.env.prod run src/cli.ts",
-    "build": "bun build ./src/cli.ts --compile --external react-devtools-core --outfile=dist/devgotchi"
+    "build": "bun build ./src/cli.ts --compile --define process.env.DEV='\"false\"' --outfile=dist/devgotchi"
   },
   "devDependencies": {
     "@types/bun": "latest",

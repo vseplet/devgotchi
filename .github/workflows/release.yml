@@ -43,7 +43,6 @@ jobs:
           bun build ./src/cli.ts \
             --compile \
             --target=${{ matrix.target }} \
-            --external react-devtools-core \
             --outfile=dist/devgotchi-${{ matrix.name }}
 
       - name: Ad-hoc codesign (macOS)
