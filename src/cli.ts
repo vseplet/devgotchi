@@ -1,39 +1,22 @@
-import { defineCommand, runMain } from "citty";
+import { createElement } from "react";
+import { render } from "ink";
 import pkg from "../package.json" with { type: "json" };
-import { hello } from "$/commands/hello";
-import { login } from "$/commands/login";
-import { whoami } from "$/commands/whoami";
+import { App } from "$/tui/App";
 
-const helloCmd = defineCommand({
-  meta: { name: "hello", description: "Print a colorful greeting" },
-  run: () => hello(),
-});
+const args = process.argv.slice(2);
 
-const loginCmd = defineCommand({
-  meta: { name: "login", description: "Authenticate via GitHub" },
-  run: () => login(),
-});
-
-const whoamiCmd = defineCommand({
-  meta: { name: "whoami", description: "Show the current session" },
-  run: () => whoami(),
-});
-
-const main = defineCommand({
-  meta: {
-    name: "devgotchi",
-    version: pkg.version,
-    description: "Collaborative dev tamagotchi",
-  },
-  subCommands: {
-    hello: helloCmd,
-    login: loginCmd,
-    whoami: whoamiCmd,
-  },
-});
-
-if (process.argv.length === 2) {
-  hello();
-} else {
-  runMain(main);
+if (args.includes("--version") || args.includes("-v")) {
+  console.log(pkg.version);
+  process.exit(0);
 }
+
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(`devgotchi v${pkg.version}
+
+Usage: devgotchi
+
+Launches the interactive TUI. Inside, use /help to see available commands.`);
+  process.exit(0);
+}
+
+render(createElement(App));

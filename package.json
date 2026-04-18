@@ -4,14 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "DEVGOTCHI_BACKEND_URL=https://devgotchi--local.vseplet.deno.net & bun run src/cli.ts",
-    "prod": "bun run src/cli.ts",
+    "dev": "bun --env-file=.env.dev run --watch src/cli.ts",
+    "prod": "bun --env-file=.env.prod run src/cli.ts",
     "build": "bun build ./src/cli.ts --compile --outfile=dist/devgotchi"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14"
   },
   "dependencies": {
-    "citty": "^0.2.2"
+    "ink": "^7.0.1",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.5"
   }
 }

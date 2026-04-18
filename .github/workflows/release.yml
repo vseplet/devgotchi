@@ -121,7 +121,7 @@ jobs:
           mkdir -p tap/Formula
           cat > tap/Formula/devgotchi.rb <<EOF
           class Devgotchi < Formula
-            desc "Tiny Bun-powered CLI that greets Homebrew"
+            desc "Collaborative devgotchi — presence, status and chat in your terminal"
             homepage "https://github.com/vseplet/devgotchi"
             version "${VERSION}"
             license "MIT"
@@ -154,7 +154,7 @@ jobs:
             end
 
             test do
-              assert_match "hello, brew!", shell_output("#{bin}/devgotchi")
+              assert_match version.to_s, shell_output("#{bin}/devgotchi --version")
             end
           end
           EOF
