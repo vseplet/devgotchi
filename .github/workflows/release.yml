@@ -1,0 +1,165 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { os: macos-latest,  target: bun-darwin-arm64, name: darwin-arm64, sign: true  }
+          - { os: macos-latest,  target: bun-darwin-x64,   name: darwin-x64,   sign: true  }
+          - { os: ubuntu-latest, target: bun-linux-arm64,  name: linux-arm64,  sign: false }
+          - { os: ubuntu-latest, target: bun-linux-x64,    name: linux-x64,    sign: false }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Build binary
+        run: |
+          mkdir -p dist
+          bun build ./src/cli.ts \
+            --compile \
+            --target=${{ matrix.target }} \
+            --outfile=dist/devgotchi-${{ matrix.name }}
+
+      - name: Ad-hoc codesign (macOS)
+        if: matrix.sign
+        run: |
+          codesign --remove-signature dist/devgotchi-${{ matrix.name }} 2>/dev/null || true
+          codesign --sign - --force --timestamp=none dist/devgotchi-${{ matrix.name }}
+          codesign --verify --verbose dist/devgotchi-${{ matrix.name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: devgotchi-${{ matrix.name }}
+          path: dist/devgotchi-${{ matrix.name }}
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      darwin_arm64_sha: ${{ steps.sha.outputs.darwin_arm64 }}
+      darwin_x64_sha: ${{ steps.sha.outputs.darwin_x64 }}
+      linux_arm64_sha: ${{ steps.sha.outputs.linux_arm64 }}
+      linux_x64_sha: ${{ steps.sha.outputs.linux_x64 }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Collect metadata
+        id: meta
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute SHA256
+        id: sha
+        run: |
+          cd dist
+          {
+            echo "darwin_arm64=$(sha256sum devgotchi-darwin-arm64 | awk '{print $1}')"
+            echo "darwin_x64=$(sha256sum devgotchi-darwin-x64 | awk '{print $1}')"
+            echo "linux_arm64=$(sha256sum devgotchi-linux-arm64 | awk '{print $1}')"
+            echo "linux_x64=$(sha256sum devgotchi-linux-x64 | awk '{print $1}')"
+          } >> "$GITHUB_OUTPUT"
+          sha256sum devgotchi-* > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/devgotchi-*
+            dist/SHA256SUMS
+          generate_release_notes: true
+
+  update-tap:
+    name: Update homebrew-tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: vseplet/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Write formula
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          DARWIN_ARM64_SHA: ${{ needs.release.outputs.darwin_arm64_sha }}
+          DARWIN_X64_SHA: ${{ needs.release.outputs.darwin_x64_sha }}
+          LINUX_ARM64_SHA: ${{ needs.release.outputs.linux_arm64_sha }}
+          LINUX_X64_SHA: ${{ needs.release.outputs.linux_x64_sha }}
+        run: |
+          mkdir -p tap/Formula
+          cat > tap/Formula/devgotchi.rb <<EOF
+          class Devgotchi < Formula
+            desc "Tiny Bun-powered CLI that greets Homebrew"
+            homepage "https://github.com/vseplet/devgotchi"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/vseplet/devgotchi/releases/download/v#{version}/devgotchi-darwin-arm64"
+                sha256 "${DARWIN_ARM64_SHA}"
+              end
+              on_intel do
+                url "https://github.com/vseplet/devgotchi/releases/download/v#{version}/devgotchi-darwin-x64"
+                sha256 "${DARWIN_X64_SHA}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/vseplet/devgotchi/releases/download/v#{version}/devgotchi-linux-arm64"
+                sha256 "${LINUX_ARM64_SHA}"
+              end
+              on_intel do
+                url "https://github.com/vseplet/devgotchi/releases/download/v#{version}/devgotchi-linux-x64"
+                sha256 "${LINUX_X64_SHA}"
+              end
+            end
+
+            def install
+              binary = Dir["devgotchi-*"].first
+              bin.install binary => "devgotchi"
+            end
+
+            test do
+              assert_match "hello, brew!", shell_output("#{bin}/devgotchi")
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        working-directory: tap
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/devgotchi.rb
+          if git diff --cached --quiet; then
+            echo "No formula changes."
+            exit 0
+          fi
+          git commit -m "devgotchi ${{ needs.release.outputs.version }}"
+          git push

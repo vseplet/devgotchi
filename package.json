@@ -1,0 +1,13 @@
+{
+  "name": "devgotchi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "build": "bun build ./src/cli.ts --compile --outfile=dist/devgotchi"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
